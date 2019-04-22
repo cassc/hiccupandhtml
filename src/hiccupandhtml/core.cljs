@@ -53,11 +53,19 @@
                (vec (cons h tail)))
              xs))
 
+(defn- remove-empty-str-inseq [xs]
+  (transform (walker (fn [el]
+                       (vector? el)))
+             (fn [el]
+               (vec (remove #(and (string? %) (string/blank? %)) el))) 
+             xs))
+
 (defn handle-parse [val]
   (-> val
       (html->hiccup true)
       convert-string-style-to-map
       remove-empty-map-inseq
+      remove-empty-str-inseq
       str
       ;; remove outer parens ()
       (string/replace-first #"^\((.*)\)" "$1")
