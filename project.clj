@@ -28,7 +28,8 @@
                                            :output-dir "resources/public/cljs/prod"
                                            :optimizations :advanced ;; :whitespace :advanced
                                            :source-map "resources/public/cljs/hiccupandhtml.map"
-                                           ;; :externs ^:replace ["externs/jquery-1.9.js"]
+                                           :infer-externs true
+                                           :externs ["externs/common.js"]
                                            :pretty-print false}}}}}
              :dev {:env {:dev true}
                    :dependencies [[com.cemerick/piggieback "0.2.1"]

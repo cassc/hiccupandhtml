@@ -114,7 +114,6 @@
 
 (defn beautify-html [ss]
   (js/html_beautify ss html-beautify-opts))
-
 (defn try-hiccup-to-html! []
   (try
     (let [hic @hiccup-store
