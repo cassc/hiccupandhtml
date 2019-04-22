@@ -44,10 +44,20 @@
                                         (string/split style #";"))))
              xs))
 
+(defn- remove-empty-map-inseq [xs]
+  (transform (walker (fn [el]
+                       (and (vector? el)
+                            (map? (second el))
+                            (empty? (second el)))))
+             (fn [[h _ & tail]]
+               (vec (cons h tail)))
+             xs))
+
 (defn handle-parse [val]
   (-> val
       (html->hiccup true)
       convert-string-style-to-map
+      remove-empty-map-inseq
       str
       ;; remove outer parens ()
       (string/replace-first #"^\((.*)\)" "$1")
