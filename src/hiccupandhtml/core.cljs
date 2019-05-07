@@ -4,7 +4,7 @@
    [reagent.core :as r :refer [atom]]
    [hickory.render :refer [hiccup-to-html hickory-to-html]]
    [hickory.core :refer [as-hickory as-hiccup parse-fragment parse]]
-   [com.rpl.specter :refer [walker]]
+   [com.rpl.specter :refer [walker recursive-path cond-path if-path ALL stay-then-continue STAY]]
    
    [cljs.reader :refer [read-string]]
    [cljsjs.codemirror]
@@ -14,7 +14,7 @@
    [cljsjs.codemirror.addon.edit.closebrackets]
    [cljsjs.codemirror.addon.edit.matchbrackets])
   (:require-macros
-   [com.rpl.specter :as s :refer [transform]]
+   [com.rpl.specter :as s :refer [transform setval]]
    [cljs.core.async.macros :refer [go-loop go]]))
 
 (enable-console-print!)
@@ -26,7 +26,7 @@
 
 (defn html->hiccup [val snippet?]
   (if snippet?
-    (map as-hiccup (parse-fragment val))
+    (mapv as-hiccup (parse-fragment val))
     (as-hiccup (parse val))))
 
 (defn- convert-string-style-to-map [xs]
@@ -44,20 +44,31 @@
                                         (string/split style #";"))))
              xs))
 
+(def EMPTY-MAP-PATH
+  (let [select-fn (fn [el]
+                    (and (vector? el)
+                         (= {} (second el))))]
+    (recursive-path []
+                    p
+                    (cond-path 
+                     select-fn (stay-then-continue [ALL p])
+                     vector? [ALL p]))))
+
 (defn- remove-empty-map-inseq [xs]
-  (transform (walker (fn [el]
-                       (and (vector? el)
-                            (map? (second el))
-                            (empty? (second el)))))
+  (transform EMPTY-MAP-PATH
              (fn [[h _ & tail]]
                (vec (cons h tail)))
              xs))
 
+(def EMPTY-STR-PATH
+  (recursive-path []
+                  p
+                  (if-path vector? (stay-then-continue [ALL p]))))
+
 (defn- remove-empty-str-inseq [xs]
-  (transform (walker (fn [el]
-                       (vector? el)))
+  (transform EMPTY-STR-PATH
              (fn [el]
-               (vec (remove #(and (string? %) (string/blank? %)) el))) 
+               (vec (remove (fn [s] (and (string? s) (string/blank? s))) el)))
              xs))
 
 (defn handle-parse [val]
@@ -68,7 +79,7 @@
       remove-empty-str-inseq
       str
       ;; remove outer parens ()
-      (string/replace-first #"^\((.*)\)" "$1")
+      (string/replace-first #"^\[(.*)]" "$1")
       ;; remove trailing "\n    "
       (string/replace #"\"(\s*\\n\s*(\w)*)*\"" "\"$2\"") 
       ;; remove in string "\n    "
