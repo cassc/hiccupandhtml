@@ -4,7 +4,8 @@
    [reagent.core :as r :refer [atom]]
    [hickory.render :refer [hiccup-to-html hickory-to-html]]
    [hickory.core :refer [as-hickory as-hiccup parse-fragment parse]]
-   [com.rpl.specter :refer [walker recursive-path cond-path if-path ALL stay-then-continue STAY]]
+   [hickory.convert :refer [hickory-to-hiccup]]
+   [com.rpl.specter :refer [walker recursive-path cond-path if-path ALL stay-then-continue STAY NONE]]
    
    [cljs.reader :refer [read-string]]
    [cljsjs.codemirror]
@@ -24,10 +25,11 @@
 (defonce app-store (atom {}))
 
 
-(defn html->hiccup [val snippet?]
-  (if snippet?
-    (mapv as-hiccup (parse-fragment val))
-    (as-hiccup (parse val))))
+(defn- html->hickory [val]
+  (mapv as-hickory (parse-fragment val)))
+
+(defn- ->hiccup [xs]
+  (mapv hickory-to-hiccup xs))
 
 (defn- convert-string-style-to-map [xs]
   (transform (walker (fn [el]
@@ -71,9 +73,28 @@
                (vec (remove (fn [s] (and (string? s) (string/blank? s))) el)))
              xs))
 
+(defn- pre-transform-comment-node [xs]
+  (transform (walker (fn [el]
+                       (and (map? el)
+                            (= :comment (:type el)))))
+             (fn [el]
+               (assoc el :type :element :tag :script :attrs {:comment :comment}))
+             xs))
+
+(defn- post-transform-comment-node [xs]
+  (transform (walker (fn [el]
+                       (and (vector? el)
+                            (= :comment (:comment (second el))))))
+             (fn [el]
+               (list 'comment (last el)))
+             xs))
+
 (defn handle-parse [val]
   (-> val
-      (html->hiccup true)
+      html->hickory
+      pre-transform-comment-node
+      ->hiccup
+      post-transform-comment-node
       convert-string-style-to-map
       remove-empty-map-inseq
       remove-empty-str-inseq
@@ -143,6 +164,15 @@
 
 (defn beautify-html [ss]
   (js/html_beautify ss html-beautify-opts))
+
+(defn- handle-block-comment [xs]
+  (transform (walker (fn [el]
+                       (when (sequential? el)
+                         (= 'comment (first el)))))
+             (fn [el]
+               (str "<!-- " (string/join (rest el)) "-->"))
+             xs))
+
 (defn try-hiccup-to-html! []
   (try
     (let [hic @hiccup-store
@@ -152,6 +182,7 @@
                       remove-onclick-function
                       (read-string {:eof nil})
                       (conj [])
+                      remove-block-comment
                       convert-reagent-style
                       hiccup-to-html
                       remove-leading-div
